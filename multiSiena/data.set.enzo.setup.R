@@ -134,36 +134,37 @@ grp.6  <- sienaDataCreate(net = G,beh = beh)
 SixGroups <- sienaGroupCreate(list(grp.1,grp.2,grp.3,grp.4,grp.5,grp.6))
 
 
-## == define model
-GroupEffects <- getEffects(SixGroups)
-GroupEffects <- includeEffects( GroupEffects, transTrip)
-GroupEffects <- includeEffects( GroupEffects, simX, interaction1 = "beh" )
-GroupsModel <- sienaAlgorithmCreate(projname = 'Enzo',seed=seed)
+## == define model 
+  ## If you wanted to define a model
+#GroupEffects <- getEffects(SixGroups)
+#GroupEffects <- includeEffects( GroupEffects, transTrip)
+#GroupEffects <- includeEffects( GroupEffects, simX, interaction1 = "beh" )
+#GroupsModel <- sienaAlgorithmCreate(projname = 'Enzo',seed=seed)
 
-## === non-Bayesian estimation was used to check stability:
+## === non-Bayesian estimation was used to check stability of dataset:
 
 #model.1 <- siena07(GroupsModel, data = FourGroups, effects = GroupEffects)
 #model.1
 
 # === set random effects:
-GroupEffects <- setEffect( GroupEffects, density,random=TRUE)
-GroupEffects <- setEffect( GroupEffects, recip,random=TRUE)
-GroupEffects <- setEffect( GroupEffects, transTrip,random=TRUE)
-GroupEffects <- setEffect(GroupEffects, simX, interaction1 = "beh" ,random=TRUE)
-GroupEffects <- setEffect(GroupEffects,linear,name ='beh'  ,random=TRUE)
+#GroupEffects <- setEffect( GroupEffects, density,random=TRUE)
+#GroupEffects <- setEffect( GroupEffects, recip,random=TRUE)
+#GroupEffects <- setEffect( GroupEffects, transTrip,random=TRUE)
+#GroupEffects <- setEffect(GroupEffects, simX, interaction1 = "beh" ,random=TRUE)
+#GroupEffects <- setEffect(GroupEffects,linear,name ='beh'  ,random=TRUE)
 
 ## === run sienaBayes ===
 
 
-p <- 7 # 2x Rates plus 5 effects
-Mu <- rep(0,p)
-Mu[2] <- mu.deg  # outdegree
-Mu[3] <- mu.rec  # reciprocity
-Mu[5] <- mu.sim # beh similarity
+#p <- 7 # 2x Rates plus 5 effects
+#Mu <- rep(0,p)
+#Mu[2] <- mu.deg  # outdegree
+#Mu[3] <- mu.rec  # reciprocity
+#Mu[5] <- mu.sim # beh similarity
 
 
-Sig <- matrix(0,p,p)
-diag(Sig) <- 0.01
+#Sig <- matrix(0,p,p)
+#diag(Sig) <- 0.01
 
 
 #groupModel.e <- sienaBayes(GroupsModel, data = FourGroups,
