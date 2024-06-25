@@ -1,0 +1,588 @@
+---
+title: "Minimal intro to sienaBayes"
+author: "Johan Koskinen and T.A.B. Snijders"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+  pdf_document:
+    toc: true
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Preamble
+
+This takes you through the very basics of Bayesian estimation forstochastic actor-oriented models
+(SAOMs). We refer to the `multiSiena` workshop page
+<https://www.stats.ox.ac.uk/~snijders/siena/Workshop_sienaBayes_2024.htm> for further resources.
+Here we will
+
+-   Provide you with a minimal example for `sienaBayes` - to take home with you
+-   Illustrate the difference between 'random' and 'fixed' effects
+-   Provide some very brief pointers for Bayesian inference
+-   Explore group-level parameters
+
+It is appropriate that we **simulate** the model as Siena stands for
+
+> **S**imulation **I**nvestigation for **E**mpirical **N**etwork **A**nalysis
+
+## Packages
+
+We will use functionality from the network packages `sna` and `network`
+(see
+<https://raw.githubusercontent.com/johankoskinen/CHDH-SNA/main/Markdowns/CHDH-SNA-2.Rmd>).
+The main packages for SAOM is `RSiena`.
+
+<h3 align="center">
+
+<a href="https://www.stats.ox.ac.uk/~snijders/siena/"><img src="https://raw.githubusercontent.com/johankoskinen/CHDH-SNA/main/images/rsienalogo.png" alt="R" width="100" height="100"/></a>
+
+</h3>
+
+You will only be able to run the code in here if you **have already installed** the latest version of `multiSiena`.
+
+```{r}
+require(RSiena)
+require(multiSiena)
+```
+
+
+## Load mock dataset
+
+Use a routine for creating synthetic dataset with 6 networks
+
+```{r}
+source("https://raw.githubusercontent.com/johankoskinen/Sunbelt2024/main/multiSiena/data.set.enzo.setup.R")
+```
+
+This dataset, `enzo`,
+
+```{r}
+enzo <- create.enzo()
+```
+is a `sienaGroup` object. 
+
+## What data
+
+Plot the 6 networks for the two waves. For each group $j=1,\ldots,6$, we have adjacency matrices
+$$
+\boldsymbol{x}^{(j)}(t_0), \text{ and } \boldsymbol{x}^{(j)}(t_1)
+$$
+For example, for group $j=1$, $\boldsymbol{x}^{(j)}(t_0)$
+```{r}
+enzo$Data1$depvars[[1]][,,1]
+```
+and
+$\boldsymbol{x}^{(j)}(t_1)$
+```{r}
+enzo$Data1$depvars[[1]][,,2]
+```
+
+For 
+```{r, message=FALSE}
+require(sna)
+coord <- matrix(c(1,1,
+1,2,
+2,2,
+2,1,
+.5,.5),5,2,byrow=TRUE)
+# === plot
+par( mfrow = c(6,2) ,oma = c(0,1,0,0) + 0.1,
+          mar = c(1,0,1,1) + 0.1)
+# grp1
+gplot( enzo$Data1$depvars[[1]][,,1] ,coord = coord, vertex.col = enzo$Data1$depvars[[2]][,1,1], label=c(1:5))
+gplot( enzo$Data1$depvars[[1]][,,2] , coord = coord, vertex.col = enzo$Data1$depvars[[2]][,1,2], label=c(1:5))
+# grp2
+gplot( enzo$Data2$depvars[[1]][,,1] ,coord = coord, vertex.col = enzo$Data2$depvars[[2]][,1,1], label=c(1:5))
+gplot( enzo$Data2$depvars[[1]][,,2] , coord = coord, vertex.col = enzo$Data2$depvars[[2]][,1,2], label=c(1:5))
+# grp3
+gplot( enzo$Data3$depvars[[1]][,,1] ,coord = coord, vertex.col = enzo$Data3$depvars[[2]][,1,1], label=c(1:5))
+gplot( enzo$Data3$depvars[[1]][,,2] , coord = coord, vertex.col = enzo$Data3$depvars[[2]][,1,2], label=c(1:5))
+# grp4
+gplot( enzo$Data4$depvars[[1]][,,1] ,coord = coord, vertex.col = enzo$Data4$depvars[[2]][,1,1], label=c(1:5))
+gplot( enzo$Data4$depvars[[1]][,,2] , coord = coord, vertex.col = enzo$Data4$depvars[[2]][,1,2], label=c(1:5))
+# grp5
+gplot( enzo$Data5$depvars[[1]][,,1] ,coord = coord, vertex.col = enzo$Data5$depvars[[2]][,1,1], label=c(1:5))
+gplot( enzo$Data5$depvars[[1]][,,2] , coord = coord, vertex.col = enzo$Data5$depvars[[2]][,1,2], label=c(1:5))
+# grp6
+gplot( enzo$Data6$depvars[[1]][,,1] ,coord = coord, vertex.col = enzo$Data6$depvars[[2]][,1,1], label=c(1:5))
+gplot( enzo$Data6$depvars[[1]][,,2] , coord = coord, vertex.col = enzo$Data6$depvars[[2]][,1,2], label=c(1:5))
+
+```
+
+# Basic Model 
+
+For eaxh group $j=1,\ldots,6$ we define a **stochastic actor-oriented model**
+$$
+\boldsymbol{x}^{(j)}(t_1) \mid \boldsymbol{x}^{(j)}(t_0) \thicksim SAOM(\theta_j)
+$$
+The $SAOM(\theta)$ is determined by its **objective** and **rate** functions
+$$
+f_i(\boldsymbol{x},\theta)\text{, and } \lambda_i(\theta)
+$$
+that are assumed to be the same for all groups $j=1,\ldots,N$.
+
+## Define model
+
+You define the *effects* of the objective function of the model in the standard way. The effects structure is obtained from `getEffects()`
+
+```{r}
+seed <- 1234
+GroupEffects <- getEffects(enzo)
+GroupsModel <- sienaAlgorithmCreate(projname = 'Enzo',seed=seed)
+```
+
+## Hierarchial model
+
+All groups have the same effects and model, $SAOM(\theta_j)$, but some of the parameters, $\gamma_j$, vary across groups, and some, $\eta$, are the same for all groups.
+
+$$
+\theta_j=\begin{bmatrix}\gamma_j\\\eta\end{bmatrix}
+$$
+
+### Group-varying and fixed
+
+By default
+
+```{r}
+summary(GroupEffects)$random
+```
+
+```{r}
+summary(GroupEffects)$effectName[summary(GroupEffects)$random]
+```
+
+```{r}
+summary(GroupEffects)$effectName[summary(GroupEffects)$random==FALSE]
+```
+
+### Model for group-varying
+
+The model assumes that the group-varying parameters follow a **multivariate normal distribution**
+$$
+\gamma_j \thicksim N(\mu,\Sigma)
+$$
+
+## Target of inference
+
+We want to estimate the population mean $\mu$ and the non-varying parameter $\eta$.
+
+### Running default
+
+To estimate the model with default settings
+
+```{r, results='hide'}
+groupModel.e <- sienaBayes(GroupsModel, data = enzo,
+				initgainGlobal=0.1, initgainGroupwise = 0.001,
+                effects = GroupEffects,
+			 nrunMHBatches=40, silentstart=FALSE)
+```
+
+
+## Results
+
+What did we get?
+
+Check objects returned
+
+```{r, results='hide'}
+names(groupModel.e)
+```
+### Non-varying
+
+The `nmain`: 300 posterior draws of $\eta$ are in `ThinPosteriorEta`
+```{r}
+dim(groupModel.e$ThinPosteriorEta)
+```
+
+This corresponds to `reciprocity` and the `linear shape` for behaviour
+
+```{r}
+par(mfrow=c(2,3))
+for (k in c(1:2)){
+  post <- groupModel.e$ThinPosteriorEta[,k]
+plot(ts(post))# draws in each iteration
+acf(post,main='')# the autocorrelation function - how much dependence
+hist(post,main='')# (empirical) posterior distribution
+}
+```
+
+Note that these are draws from a bivariate distribution
+
+```{r}
+plot(groupModel.e$ThinPosteriorEta)
+```
+
+> We can calculate probabilites for the parameters using the values simulated from the posterior
+
+For example, we can calculate the probability that the reciprocity parameter is positive **given data** as
+
+```{r}
+mean(groupModel.e$ThinPosteriorEta[,1]>0)
+```
+
+> Given these 6 (synthetic) networks, the reciprocity parameter is positive with a posterior probability of 1
+
+
+### Population parameters
+
+The posteriors for $\mu$ are found in `ThinPosteriorMu`
+
+```{r}
+dim(groupModel.e$ThinPosteriorMu)
+```
+
+Corresponding to the rate for the network, density, and rate for behaviour
+
+```{r}
+par(mfrow=c(3,3))
+for (k in c(1:3)){
+  post <- groupModel.e$ThinPosteriorMu[,k]
+plot(ts(post))
+acf(post,main='')
+hist(post,main='')
+}
+```
+
+## Summary of results
+
+To get a table to numerical summaries of the posteriors
+
+```{r}
+summary(groupModel.e)
+```
+
+# Changing hierarchial model
+
+In the previous model, `reciprocity` was assumed to have the same parameter $\theta_{j,rec}=\eta_{rec}$, for all $j=1,\ldots,6$. To allow the `reciprocity` parameter to *vary* across groups $j$, set
+
+```{r}
+GroupEffects <- setEffect( GroupEffects, recip,random=TRUE)
+```
+
+so that now
+$$
+\theta_j=\begin{bmatrix}
+\gamma_{j,rate_x}\\
+\gamma_{j,dens}\\
+\gamma_{j,rec}\\
+\gamma_{j,rate_z}\\
+\eta_{shape,z}
+\end{bmatrix}
+\text{, and }
+\gamma_{j} \thicksim \mathcal{N}_{4}(\mu,\Sigma)
+$$
+
+### Running new model
+
+To estimate the model with one more random effect
+
+```{r, results='hide'}
+groupModel.e2 <- sienaBayes(GroupsModel, data = enzo,
+				initgainGlobal=0.1, initgainGroupwise = 0.001,
+                effects = GroupEffects,
+			 nrunMHBatches=40, silentstart=FALSE)
+```
+
+### Output
+
+To highlight the fact that our posterior inference is represented by *simulated draws of random variables*, we will now examine and plot these random parameters using standard `R` functions.
+
+> The script `BayesPlots.R` contains functions for plots that are **custom made** for exaxamining the estimation results from `sienaBayes`
+
+You will find `BayesPlots.R` here: <https://www.stats.ox.ac.uk/~snijders/siena/BayesPlots.r>; and explanations and examples of their usage are found here: <https://www.stats.ox.ac.uk/~snijders/siena/SienaBayesExample5_s.pdf>.
+
+Now we only have one common parameter, one $\eta$
+
+```{r}
+plot(groupModel.e2$ThinPosteriorEta)
+```
+
+
+In `BayesPlots.R`, the function `GlobalNonRateParameterPlots`, provides custom-made plots of these posteriors.
+
+In the plot we see the 300 simulated values of $\eta$ that are drawn using MCMC from the posterior distribution of $\eta$ given data. 
+
+> Given these 6 (synthetic) networks, the reciprocity parameter is positive with a posterior probability of 1
+
+But we have $\mu$ has four dimentions (parameters)
+
+```{r}
+pairs(groupModel.e2$ThinPosteriorMu)
+```
+
+We can calculate the probability that the reciprocity parameter is positive **given data** as
+
+```{r}
+mean(groupModel.e2$ThinPosteriorMu[,3]>0)
+```
+
+# Group-level analysis
+
+For reciprocity, we saw in the previous example that
+$$
+\Pr(\mu_{rec}>0 \mid Data) \approx 1
+$$
+but what about the group-level parameters $\gamma_{1,rec},\gamma_{2,rec},\ldots,\gamma_{6,rec}$ - are they always positive for all of the groups?
+
+## Group and population-level
+
+The posterior (predictive) distributions of the $\gamma_{j}$'s are stored in `ThinParameters` as **iteration** by **group** by **parameter**
+
+```{r}
+dim(groupModel.e2$ThinParameters)
+```
+
+and within each group
+
+```{r}
+head(groupModel.e2$ThinParameters[,1,])
+```
+
+To illustrate how we have inference for $\mu$ for density and reciprocity, but also for $\gamma_j$ for density and reciprocity for each group, let us plot density against reciprocity for both levels
+
+```{r}
+plot(groupModel.e2$ThinPosteriorMu[,2],
+     groupModel.e2$ThinPosteriorMu[,3],
+     xlim=range(groupModel.e2$ThinParameters[,,2]),
+     ylim=range(groupModel.e2$ThinParameters[,,3]),
+     pch=4, xlab='density',ylab='reciprocity')
+grp.cols <- c('darkred','red','darkorange','orange','gold','darkgreen')
+for (j in c(1:6))
+{
+  lines( groupModel.e2$ThinParameters[,j,2], groupModel.e2$ThinParameters[,j,3],type='p',pch=1,col=grp.cols[j])
+}
+abline(v=mean(groupModel.e2$ThinPosteriorMu[,2]))
+abline(h=mean(groupModel.e2$ThinPosteriorMu[,3]))
+abline(v=0,col='grey',lty=4)
+abline(h=0,col='grey',lty=4)
+```
+
+For an individual parameter it is common to look at the catepilar plot
+
+```{r}
+require(HDInterval)
+grp.means <- colMeans(groupModel.e2$ThinParameters[,,3])
+boxplot(groupModel.e2$ThinParameters[,order(grp.means),3],
+        ylab=expression(theta[j]),xlab='Group j',main='Posteriors for group-level reciprocity (ordered)' )
+CI <- hdi(groupModel.e2$ThinPosteriorMu[,3],1-.05)
+abline(h=CI[1],col='grey',lty=4)
+abline(h=CI[2],col='grey',lty=4)
+```
+
+> In the catepillar plot, we have the (posterior) predictive distributions for the group-level reciprocity parameters, ordered accourding to the group-mean. Grey lines represent the credibility interval for the population-level reciprocity parameter $\mu_{rec}$
+
+# Prior and posterior
+
+To get a posterior distribution for $\mu$ and $\eta$ (and $\Sigma$), we need to have **prior distributions** for these parameters
+
+> A prior distribution for a parameter quantifies the uncertainty that we have about a parameter before we collect and observe DATA
+
+## Example: Bernoulli graph
+
+For a cross-section $n=5$ network, a Bernoulli graph says that each of the $5(5-1)/2=10$ possible ties all have a probability of $p$ of being present, independently of each other. The parameter $0 \leq p \leq 1$ and hence a prior for $p$ might be $p \thicksim Beta(\alpha,\beta)$
+
+```{r}
+alpha.p <- 2
+beta.p <- 2
+```
+
+```{r}
+p <- seq(from=.0001,to =.9999, length.out = 1000)
+plot( p , dbeta(p, alpha.p, beta.p) , type = 'l', yaxt='n',ylab=expression(pi(p)))
+```
+
+Assume that we observe the network
+
+$$
+\mathbf{X}=
+\begin{bmatrix}
+- & 1 & 0 & 0 & 0 \\
+- & - & 0 & 1 & 0 \\
+- & - & - & 0 & 0 \\
+- & - & - & - & 0 \\
+- & - & - & - & - \\
+\end{bmatrix}
+$$
+
+This has $L=\sum_{i<j}x_{ij}=2$, which gives the **likelihood** function for $p$
+
+```{r}
+plot(p,p^2*(1-p)^8, type = 'l', yaxt='n',ylab='L(p ; X ) ' )
+```
+
+The posterior distribution will be $p \mid \mathbf{X} \thicksim Beta(2+\alpha,8+\beta)$
+
+```{r}
+plot( p , dbeta(p, alpha.p+2, beta.p+8) , type = 'l', yaxt='n',ylab=expression(pi(p ~"|"~ X)))
+```
+
+> Try with different values of the hyperparameters $\alpha$ and $\beta$ in the prior for $p$
+
+Even better, try Mattias Villani's widget that illustates Bayesian inference <https://observablehq.com/@mattiasvillani/bayesian-inference-for-bernoulli-iid-data?collection=@mattiasvillani/bayesian-learning>[Beta-Binomial]
+
+## Example: SAOM
+
+To understand the hierarchical SAOM, have a look at what group-level parameters our model assumed for a given $\mu$. You may investigate this using simulation.
+
+### Drawing $\theta_j$
+
+If we *knew* $\mu$ and $\Sigma$, we can draw $\theta_j \thicksim \mathcal{N}_4(\mu,\Sigma)$. The (implied) model in our estimated model is given by
+```{r}
+mu <- groupModel.e2$priorMu
+Sigma <- (1/groupModel.e2$priorDf)*groupModel.e2$priorSigma
+```
+
+For $\Sigma$, we plug in the prior expected value $E(\Sigma)=\nu^{-1}\Lambda_0$.
+
+We can draw $M$ sets of parameters
+
+```{r}
+require(mvtnorm)
+M <- 6
+thetas <- rmvnorm(M, mean =mu, sigma = Sigma)
+```
+
+So, these are $M$ vectors, each with 4 parameters.
+
+```{r}
+colnames(thetas) <- colnames(groupModel.e2$ThinParameters[,1,1:4])
+```
+
+```{r}
+pairs(thetas)
+```
+
+> We can do this many times to get an idea of the model means. We can also set $M$ large, to get an idea of the distribution
+
+For a given value of $\mu$ and $\Sigma$, each $\theta_{j,k}$ will be normally distributed. For example, here, the distribution for reciprocity
+
+```{r}
+M <- 200
+thetas <- rmvnorm(M, mean =mu, sigma = Sigma)
+colnames(thetas) <- colnames(groupModel.e2$ThinParameters[,1,1:4])
+k <- 3
+hist(thetas[,k],main='Prior (conditional) model',xlab=colnames(thetas)[k])
+```
+### Drawing $\mu$
+
+When we estimate the model, $\mu$ and $\Sigma$  are not fixed and, recall, we are not necessarily interested in the $\theta_j$'s, but the parameters $\mu$ and $\Sigma$. Our prior for $\Sigma$ is
+$$
+\Sigma \thicksim InvWish(\Lambda_0,\nu)
+$$
+
+```{r}
+M <- 200
+
+priorSigDraws <- rWishart(M,groupModel.e2$priorDf,
+				groupModel.e2$priorSigma)
+```
+
+and
+$$
+\mu \mid \Sigma \thicksim \mathcal{N}_4(\mu_0,\Sigma/\kappa_0)
+$$
+
+> NB: the current default for $\kappa_0$ is 
+
+```{r}
+groupModel.e2$priorKappa
+```
+
+For now, let us set it to 1 for the purpose of illustration.
+
+```{r}
+priorMuDraws <- matrix(0,M,length(groupModel.e2$priorMu))
+colnames(priorMuDraws) <- colnames(groupModel.e2$ThinParameters[,1,1:4])
+for (k in c(1:M))
+{
+  priorMuDraws[k,] <-  rmvnorm(1, mean =groupModel.e2$priorMu, sigma = priorSigDraws[,,k])
+}
+```
+
+A plot of our prior distribution of $\mu$ is given by
+
+```{r}
+pairs(priorMuDraws)
+```
+
+> In practice, people do not investigate their prior but you may in order to get an idea of what you are assuming when estimating the model
+
+### Drawing $\theta_j$ unconditionally
+
+Previously, we drew from the distribution of $\theta_j \mid \mu, \Sigma$, i.e. *conditionally* on the unknown parameters. Taking our prior uncertainty about $\mu$ and $\Sigma$ into account, we can now draw $\theta_j$,  *un-conditionally* on the unknown parameters
+
+```{r}
+thetas <- matrix(0,M,length(groupModel.e2$priorMu))
+colnames(thetas) <- colnames(groupModel.e2$ThinParameters[,1,1:4])
+for (k in c(1:M))
+{
+  thetas[k,] <-  rmvnorm(1, mean = priorMuDraws[k,], sigma = priorSigDraws[,,k])
+}
+```
+
+The uncertainty about $\mu$ will propagate into the uncertainty about $\theta_j$
+
+
+```{r}
+pairs(thetas)
+```
+
+# More and bigger
+
+Load routies
+
+```{r, echo=FALSE}
+source("https://raw.githubusercontent.com/johankoskinen/Sunbelt2024/main/multiSiena/data.set.Karen.R")
+```
+
+Create two waves for $M$ networks, all of size $n$
+
+```{r}
+n <- 10 # you could make this larger or smaller
+M <- 5 # this is very few groups and you could try to produce many
+```
+
+The `Karen` dataset has as many groups as you like
+
+```{r, results='hide'}
+Karen <- data.set.karen.set.up(n=10,# number of nodes
+                      M=5,# number of networks
+                      seed=123,nbrNodes=1,nmain=20,nwarm=20)
+```
+
+The networks are simulated from a model with effects, that in addition to the defaults have
+
+- `transTrip`
+- `simX` with `interaction1 = "beh"`
+
+Now, figure out what inputs you need. The  `sienaGroup` object is `Karen$my.Karen`
+
+```{r}
+Karen$my.Karen
+```
+
+> For different model specifications, think of what priors you need to specify. Which ones should be random and which fixed?
+
+> With the same prior, how does increasing $M$ affect inference?
+
+> Increasing the prior variance ($\Sigma$), how does that affect inference?
+
+```{r, eval=FALSE}
+groupModel.e <- sienaBayes(Karen$GroupsModel, data = Karen$my.Karen,
+                            initgainGlobal=0.1, initgainGroupwise = 0.001,
+                            effects = Karen$effects, priorMu = Karen$priorMu, priorSigma = Karen$priorSigma,
+                            priorKappa = 0.01,
+                            nwarm=Karen$nwarm, nmain=Karen$nmain, nrunMHBatches=40,
+                            nbrNodes=Karen$nbrNodes, silentstart=FALSE)
+```
+
+
+
